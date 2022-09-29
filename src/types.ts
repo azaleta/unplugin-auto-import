@@ -51,6 +51,8 @@ export type Resolver = ResolverFunction | ResolverResultObject
  */
 export type ImportsMap = Record<string, (string | ImportNameAlias)[]>
 
+export type ImportsMapContent = (string | ImportNameAlias)[]
+
 export type ESLintGlobalsPropValue = boolean | 'readonly' | 'readable' | 'writable' | 'writeable'
 
 export interface ESLintrc {
@@ -146,5 +148,7 @@ export interface Options {
    */
   eslintrc?: ESLintrc
 }
+
+export const IMPORT_EXCLUDE_PREFIX = '^'
 
 export { PresetName }

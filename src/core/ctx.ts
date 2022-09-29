@@ -8,8 +8,11 @@ import type { Import } from 'unimport'
 import { vueTemplateAddon } from 'unimport/addons'
 import { createUnimport, scanDirExports } from 'unimport'
 import MagicString from 'magic-string'
+import type { PresetName } from '../presets'
 import { presets } from '../presets'
-import type { ESLintrc, ImportExtended, Options } from '../types'
+import type { ESLintrc, ImportExtended, ImportsMap, ImportsMapContent, Options } from '../types'
+
+import { parseImport } from '../utils'
 import { generateESLintConfigs } from './eslintrc'
 import { resolversAddon } from './resolvers'
 
@@ -151,16 +154,48 @@ export function createContext(options: Options = {}, root = process.cwd()) {
 
 export function flattenImports(map: Options['imports'], overriding = false): Import[] {
   const flat: Record<string, Import> = {}
+  let importDefinitions: ImportsMap = {}
   toArray(map).forEach((definition) => {
+    importDefinitions = {}
     if (typeof definition === 'string') {
       if (!presets[definition])
         throw new Error(`[auto-import] preset ${definition} not found`)
       const preset = presets[definition]
-      definition = typeof preset === 'function' ? preset() : preset
+      importDefinitions = typeof preset === 'function' ? preset() : preset
+    }
+    else {
+      for (const presetName of Object.keys(definition)) {
+        const { presetExclude, presetAlias } = parseImport(presetName, definition[presetName])
+        // include only(just pass the object)
+        if (presetExclude.length === 0) {
+          importDefinitions[presetName] = definition[presetName]
+        }
+        else {
+          if (!presets[presetName as PresetName])
+            throw new Error(`[auto-import] exclude import could not be used on undifined preset ${presetName}`)
+          const preset = presets[presetName as PresetName]
+          const presetDefinition = typeof preset === 'function' ? preset() : preset
+          const needImport: ImportsMapContent = []
+
+          for (const definedImport of presetDefinition[Object.keys(presetDefinition)[0]]) {
+            // currently preset don't have alias import
+            if (typeof definedImport === 'string') {
+              if (!presetExclude.includes(definedImport)) {
+                if (Object.keys(presetAlias).includes(definedImport))
+                  needImport.push(presetAlias[definedImport])
+
+                else
+                  needImport.push(definedImport)
+              }
+            }
+          }
+          importDefinitions[presetName] = needImport
+        }
+      }
     }
 
-    for (const mod of Object.keys(definition)) {
-      for (const id of definition[mod]) {
+    for (const mod of Object.keys(importDefinitions)) {
+      for (const id of importDefinitions[mod]) {
         const meta = {
           from: mod,
         } as Import
